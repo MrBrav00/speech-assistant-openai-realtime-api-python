@@ -23,7 +23,7 @@ SYSTEM_MESSAGE = (
     "If they decline, be polite and offer to check back later. "
     "Do NOT drift into unrelated topics. Stay professional yet conversational, not robotic."
 )
-VOICE = 'alloy'
+VOICE = 'onyx'  # Onyx has a deep, natural male voice
 
 app = FastAPI()
 
@@ -123,6 +123,26 @@ async def send_initial_conversation_item(openai_ws):
     }
     await openai_ws.send(json.dumps(initial_conversation_item))
     await openai_ws.send(json.dumps({"type": "response.create"}))
+
+    # Pause briefly to let the customer respond, then smoothly continue
+    await asyncio.sleep(3)  
+
+    follow_up = {
+        "type": "conversation.item.create",
+        "item": {
+            "type": "message",
+            "role": "user",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": "Great! I wanted to quickly check if you have any upcoming projects where you might need pipes."
+                }
+            ]
+        }
+    }
+    await openai_ws.send(json.dumps(follow_up))
+    await openai_ws.send(json.dumps({"type": "response.create"}))
+
 
 async def initialize_session(openai_ws):
     """Control initial session with OpenAI."""
