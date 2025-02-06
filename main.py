@@ -6,7 +6,7 @@ import websockets
 from fastapi import FastAPI, WebSocket, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.websockets import WebSocketDisconnect
-from twilio.twiml.voice_response import VoiceResponse, Connect, Say, Gather
+from twilio.twiml.voice_response import VoiceResponse, Connect, Say, Stream
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,7 +14,6 @@ load_dotenv()
 # Configuration
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 PORT = int(os.getenv('PORT', 5050))
-
 SYSTEM_MESSAGE = (
     "You are a professional sales representative for Bravo Underground Bore. "
     "Your goal is to engage potential customers about their pipe needs for upcoming projects. "
@@ -26,7 +25,6 @@ SYSTEM_MESSAGE = (
     "Our website is bravobores.com "
     "Do NOT drift into unrelated topics. Stay professional yet conversational, not robotic."
 )
-
 VOICE = 'alloy'
 LOG_EVENT_TYPES = [
     'error', 'response.content.done', 'rate_limits.updated',
@@ -34,7 +32,6 @@ LOG_EVENT_TYPES = [
     'input_audio_buffer.speech_stopped', 'input_audio_buffer.speech_started',
     'session.created'
 ]
-
 SHOW_TIMING_MATH = False
 
 app = FastAPI()
@@ -50,36 +47,13 @@ async def index_page():
 async def handle_incoming_call(request: Request):
     """Handle incoming call and return TwiML response to connect to Media Stream."""
     response = VoiceResponse()
-
-    # Ask the user if they'd like to talk to a representative
-    response.say("Hi! This is Julia from Bravo Underground. May I ask who I’m speaking with?")
-    response.pause(length=1)
-    response.say("If you'd like to talk to someone about scheduling, press 1 now.")
-    
-    # Gather input from the user (in this case, pressing 1)
-    gather = Gather(num_digits=1, action="/gather-input", method="POST")
-    response.append(gather)
-
+    # <Say> punctuation to improve text-to-speech flow
+    response.say("Say Hello")
+    host = request.url.hostname
+    connect = Connect()
+    connect.stream(url=f'wss://{host}/media-stream')
+    response.append(connect)
     return HTMLResponse(content=str(response), media_type="application/xml")
-
-@app.api_route("/gather-input", methods=["POST"])
-async def gather_input(request: Request):
-    """Handle the user input (pressing 1)."""
-    form_data = await request.form()
-    user_input = form_data.get('Digits')
-
-    response = VoiceResponse()
-
-    if user_input == '1':
-        # If the user presses 1, connect them to a representative (or trigger a callback)
-        response.say("Thank you! Connecting you to a representative now.")
-        response.dial("+12393146898")  # Replace with the phone number to dial
-    else:
-        # If the user doesn't press 1, continue the conversation
-        response.say("Alright, feel free to ask any questions!")
-    
-    return HTMLResponse(content=str(response), media_type="application/xml")
-
 
 @app.websocket("/media-stream")
 async def handle_media_stream(websocket: WebSocket):
@@ -102,27 +76,23 @@ async def handle_media_stream(websocket: WebSocket):
         last_assistant_item = None
         mark_queue = []
         response_start_timestamp_twilio = None
-
+        
         async def receive_from_twilio():
-            """Receive audio data from Twilio and send it to OpenAI."""
+            """Receive audio data from Twilio and send it to the OpenAI Realtime API."""
             nonlocal stream_sid, latest_media_timestamp
             try:
                 async for message in websocket.iter_text():
                     data = json.loads(message)
-                    print(f"📥 Received data from Twilio: {data}")  # Log the received data
-
                     if data['event'] == 'media' and openai_ws.open:
                         latest_media_timestamp = int(data['media']['timestamp'])
-                        if data['media']['payload']:
-                            audio_append = {
-                                "type": "input_audio_buffer.append",
-                                "audio": data['media']['payload']
-                            }
-                            await openai_ws.send(json.dumps(audio_append))
-                            print(f"🎤 Audio data sent to OpenAI: {data['media']['payload']}")  # Log audio sent to OpenAI
+                        audio_append = {
+                            "type": "input_audio_buffer.append",
+                            "audio": data['media']['payload']
+                        }
+                        await openai_ws.send(json.dumps(audio_append))
                     elif data['event'] == 'start':
                         stream_sid = data['start']['streamSid']
-                        print(f"📡 Incoming stream has started {stream_sid}")
+                        print(f"Incoming stream has started {stream_sid}")
                         response_start_timestamp_twilio = None
                         latest_media_timestamp = 0
                         last_assistant_item = None
@@ -130,7 +100,7 @@ async def handle_media_stream(websocket: WebSocket):
                         if mark_queue:
                             mark_queue.pop(0)
             except WebSocketDisconnect:
-                print("❌ Client disconnected.")
+                print("Client disconnected.")
                 if openai_ws.open:
                     await openai_ws.close()
 
@@ -140,6 +110,8 @@ async def handle_media_stream(websocket: WebSocket):
             try:
                 async for openai_message in openai_ws:
                     response = json.loads(openai_message)
+                    if response['type'] in LOG_EVENT_TYPES:
+                        print(f"Received event: {response['type']}", response)
 
                     if response.get('type') == 'response.audio.delta' and 'delta' in response:
                         audio_payload = base64.b64encode(base64.b64decode(response['delta'])).decode('utf-8')
@@ -151,18 +123,56 @@ async def handle_media_stream(websocket: WebSocket):
                             }
                         }
                         await websocket.send_json(audio_delta)
-                        print(f"📤 Sent audio response back to Twilio: {audio_payload[:50]}...")  # Log audio response sent back
 
                         if response_start_timestamp_twilio is None:
                             response_start_timestamp_twilio = latest_media_timestamp
+                            if SHOW_TIMING_MATH:
+                                print(f"Setting start timestamp for new response: {response_start_timestamp_twilio}ms")
 
+                        # Update last_assistant_item safely
                         if response.get('item_id'):
                             last_assistant_item = response['item_id']
 
                         await send_mark(websocket, stream_sid)
 
+                    # Trigger an interruption. Your use case might work better using `input_audio_buffer.speech_stopped`, or combining the two.
+                    if response.get('type') == 'input_audio_buffer.speech_started':
+                        print("Speech started detected.")
+                        if last_assistant_item:
+                            print(f"Interrupting response with id: {last_assistant_item}")
+                            await handle_speech_started_event()
             except Exception as e:
-                print(f"❌ Error in send_to_twilio: {e}")
+                print(f"Error in send_to_twilio: {e}")
+
+        async def handle_speech_started_event():
+            """Handle interruption when the caller's speech starts."""
+            nonlocal response_start_timestamp_twilio, last_assistant_item
+            print("Handling speech started event.")
+            if mark_queue and response_start_timestamp_twilio is not None:
+                elapsed_time = latest_media_timestamp - response_start_timestamp_twilio
+                if SHOW_TIMING_MATH:
+                    print(f"Calculating elapsed time for truncation: {latest_media_timestamp} - {response_start_timestamp_twilio} = {elapsed_time}ms")
+
+                if last_assistant_item:
+                    if SHOW_TIMING_MATH:
+                        print(f"Truncating item with ID: {last_assistant_item}, Truncated at: {elapsed_time}ms")
+
+                    truncate_event = {
+                        "type": "conversation.item.truncate",
+                        "item_id": last_assistant_item,
+                        "content_index": 0,
+                        "audio_end_ms": elapsed_time
+                    }
+                    await openai_ws.send(json.dumps(truncate_event))
+
+                await websocket.send_json({
+                    "event": "clear",
+                    "streamSid": stream_sid
+                })
+
+                mark_queue.clear()
+                last_assistant_item = None
+                response_start_timestamp_twilio = None
 
         async def send_mark(connection, stream_sid):
             if stream_sid:
