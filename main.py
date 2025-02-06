@@ -24,7 +24,6 @@ SYSTEM_MESSAGE = (
     "Do NOT drift into unrelated topics. Stay professional yet conversational, not robotic."
     "phone_number  123-456-7890",
     "website www.bravobores.com",
-
 )
 VOICE = 'alloy'
 LOG_EVENT_TYPES = [
@@ -49,7 +48,9 @@ async def handle_incoming_call(request: Request):
     """Handle incoming call and return TwiML response to connect to Media Stream."""
     response = VoiceResponse()
     # <Say> punctuation to improve text-to-speech flow
-    response.say("Call Monitored and recorded")
+    response.say("Monitored")
+    response.pause(length=1)
+    response.say("O.K. you can start talking!")
     host = request.url.hostname
     connect = Connect()
     connect.stream(url=f'wss://{host}/media-stream')
@@ -217,14 +218,14 @@ async def initialize_session(openai_ws):
             "voice": VOICE,
             "instructions": SYSTEM_MESSAGE,
             "modalities": ["text", "audio"],
-            "temperature": 0.9,
+            "temperature": 0.8,
         }
     }
     print('Sending session update:', json.dumps(session_update))
     await openai_ws.send(json.dumps(session_update))
 
     # Uncomment the next line to have the AI speak first
-    # await send_initial_conversation_item(openai_ws)
+    await send_initial_conversation_item(openai_ws)
 
 if __name__ == "__main__":
     import uvicorn
