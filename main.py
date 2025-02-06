@@ -38,8 +38,29 @@ if not OPENAI_API_KEY:
 async def index_page():
     return {"message": "Twilio Media Stream Server is running!"}
 
-@app.api_route("/incoming-call", methods=["GET", "POST"])
+@app.post("/incoming-call")
 async def handle_incoming_call(request: Request):
+    """Handle incoming call and return TwiML response to connect to Media Stream."""
+    try:
+        data = await request.body()  # Read raw request body
+        print(f"🔹 Received Twilio POST data: {data}")  # Debugging
+
+        response = VoiceResponse()
+        response.say("Please wait while we connect your call to the AI voice assistant.")
+        response.pause(length=1)
+        response.say("Okay, you can start talking!")
+
+        host = request.url.hostname
+        connect = Connect()
+        connect.stream(url=f'wss://{host}/media-stream')
+        response.append(connect)
+
+        return HTMLResponse(content=str(response), media_type="application/xml")
+    
+    except Exception as e:
+        print(f"❌ Error in /incoming-call: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
     """Handle incoming call and return TwiML response to connect to Media Stream."""
     response = VoiceResponse()
     # <Say> punctuation to improve text-to-speech flow
