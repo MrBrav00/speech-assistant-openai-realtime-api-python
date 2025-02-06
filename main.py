@@ -15,10 +15,14 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 PORT = int(os.getenv('PORT', 5050))
 SYSTEM_MESSAGE = (
-    "You are a helpful and bubbly AI assistant who loves to chat about "
-    "anything the user is interested in and is prepared to offer them facts. "
-    "You have a penchant for dad jokes, owl jokes, and rickrolling – subtly. "
-    "Always stay positive, but work in a joke when appropriate."
+    "You are a professional sales representative for Bravo Underground. "
+    "Your goal is to engage potential customers about their pipe needs for upcoming projects. "
+    "Start by introducing yourself and asking for their name. "
+    "Once they respond, guide the conversation towards discussing reel vs. stick pipes, pricing, and delivery options. "
+    "If they show interest, offer a follow-up or pricing details. "
+    "If they decline, be polite and offer to check back later. "
+    "Do NOT drift into unrelated topics. Stay professional yet conversational, not robotic."
+
 )
 VOICE = 'alloy'
 LOG_EVENT_TYPES = [
@@ -43,9 +47,7 @@ async def handle_incoming_call(request: Request):
     """Handle incoming call and return TwiML response to connect to Media Stream."""
     response = VoiceResponse()
     # <Say> punctuation to improve text-to-speech flow
-    response.say("Please wait while we connect your call to the A. I. voice assistant, powered by Twilio and the Open-A.I. Realtime API")
-    response.pause(length=1)
-    response.say("O.K. you can start talking!")
+    response.say("Hi! This is Julia from Bravo Underground. May I ask who I’m speaking with?")
     host = request.url.hostname
     connect = Connect()
     connect.stream(url=f'wss://{host}/media-stream')
@@ -213,7 +215,7 @@ async def initialize_session(openai_ws):
             "voice": VOICE,
             "instructions": SYSTEM_MESSAGE,
             "modalities": ["text", "audio"],
-            "temperature": 0.8,
+            "temperature": 0.9,
         }
     }
     print('Sending session update:', json.dumps(session_update))
