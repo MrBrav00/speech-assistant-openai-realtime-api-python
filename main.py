@@ -25,7 +25,7 @@ SYSTEM_MESSAGE = (
     "Our website is bravobores.com "
     "Do NOT drift into unrelated topics. Stay professional yet conversational, not robotic."
 )
-VOICE = 'onyx'
+VOICE = 'nova'
 LOG_EVENT_TYPES = [
     'error', 'response.content.done', 'rate_limits.updated',
     'response.done', 'input_audio_buffer.committed',
@@ -213,7 +213,7 @@ session_update = {
         "turn_detection": {"type": "server_vad"},
         "input_audio_format": "g711_ulaw",
         "output_audio_format": "g711_ulaw",
-        "voice": "onyx",  # Use the correct voice here
+        "voice": VOICE,  # Use the correct voice here
         "instructions": SYSTEM_MESSAGE,
         "modalities": ["text", "audio"],
         "temperature": 0.9,
