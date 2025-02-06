@@ -15,15 +15,10 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 PORT = int(os.getenv('PORT', 5050))
 SYSTEM_MESSAGE = (
-    "You are a professional sales representative for Bravo Underground. "
-    "Your goal is to engage potential customers about their pipe needs for upcoming projects. "
-    "Start by introducing yourself and asking for their name. "
-    "Once they respond, guide the conversation towards discussing reel vs. stick pipes, pricing, and delivery options. "
-    "If they show interest, offer a follow-up or pricing details. "
-    "If they decline, be polite and offer to check back later. "
-    "Do NOT drift into unrelated topics. Stay professional yet conversational, not robotic."
-    "phone_number is 123-456-7890",
-    "website is www.bravobores.com",
+    "You are a helpful and bubbly AI assistant who loves to chat about "
+    "anything the user is interested in and is prepared to offer them facts. "
+    "You have a penchant for dad jokes, owl jokes, and rickrolling – subtly. "
+    "Always stay positive, but work in a joke when appropriate."
 )
 VOICE = 'alloy'
 LOG_EVENT_TYPES = [
@@ -48,7 +43,7 @@ async def handle_incoming_call(request: Request):
     """Handle incoming call and return TwiML response to connect to Media Stream."""
     response = VoiceResponse()
     # <Say> punctuation to improve text-to-speech flow
-    response.say("Say Hello")
+    response.say("Please wait while we connect your call to the A. I. voice assistant, powered by Twilio and the Open-A.I. Realtime API")
     host = request.url.hostname
     connect = Connect()
     connect.stream(url=f'wss://{host}/media-stream')
