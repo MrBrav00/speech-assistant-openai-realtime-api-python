@@ -25,7 +25,7 @@ SYSTEM_MESSAGE = (
     "Our website is bravobores.com "
     "Do NOT drift into unrelated topics. Stay professional yet conversational, not robotic."
 )
-VOICE = 'Nova'
+VOICE = 'onyx'
 LOG_EVENT_TYPES = [
     'error', 'response.content.done', 'rate_limits.updated',
     'response.done', 'input_audio_buffer.committed',
