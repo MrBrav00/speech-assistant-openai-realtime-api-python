@@ -49,7 +49,7 @@ async def handle_incoming_call(request: Request):
     """Handle incoming call and return TwiML response to connect to Media Stream."""
     response = VoiceResponse()
     # <Say> punctuation to improve text-to-speech flow
-    response.say("Hi! This is Julia from Bravo Underground. May I ask who I’m speaking with?")
+    response.say("Call Monitored and recorded")
     host = request.url.hostname
     connect = Connect()
     connect.stream(url=f'wss://{host}/media-stream')
@@ -224,7 +224,7 @@ async def initialize_session(openai_ws):
     await openai_ws.send(json.dumps(session_update))
 
     # Uncomment the next line to have the AI speak first
-     await send_initial_conversation_item(openai_ws)
+    # await send_initial_conversation_item(openai_ws)
 
 if __name__ == "__main__":
     import uvicorn
