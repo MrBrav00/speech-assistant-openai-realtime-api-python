@@ -1,11 +1,12 @@
-import requests
-import json
 import os
+import json
+import base64
 import asyncio
 import websockets
 from fastapi import FastAPI, WebSocket, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from twilio.twiml.voice_response import VoiceResponse, Connect
+from fastapi.websockets import WebSocketDisconnect
+from twilio.twiml.voice_response import VoiceResponse, Connect, Say, Stream
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -13,30 +14,31 @@ load_dotenv()
 # Configuration
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 PORT = int(os.getenv('PORT', 5050))
-VOICE = 'alloy'  # Voice setting for OpenAI
+SYSTEM_MESSAGE = (
+    "You are a professional sales representative for Bravo Underground. "
+    "Your goal is to engage potential customers about their pipe needs for upcoming projects. "
+    "Start by introducing yourself and asking for their name. "
+    "Once they respond, guide the conversation towards discussing reel vs. stick pipes, pricing, and delivery options. "
+    "If they show interest, offer a follow-up or pricing details. "
+    "If they decline, be polite and offer to check back later. "
+    "Do NOT drift into unrelated topics. Stay professional yet conversational, not robotic."
+    "phone_number  123-456-7890",
+    "website www.bravobores.com",
+
+)
+VOICE = 'alloy'
 LOG_EVENT_TYPES = [
     'error', 'response.content.done', 'rate_limits.updated',
     'response.done', 'input_audio_buffer.committed',
     'input_audio_buffer.speech_stopped', 'input_audio_buffer.speech_started',
     'session.created'
 ]
+SHOW_TIMING_MATH = False
 
 app = FastAPI()
 
 if not OPENAI_API_KEY:
     raise ValueError('Missing the OpenAI API key. Please set it in the .env file.')
-
-# GitHub raw URL where the info.json is hosted
-url = "https://raw.githubusercontent.com/MrBrav00/speech-assistant-openai-realtime-api-python/main/info.json"
-
-def fetch_info_from_github():
-    """Fetch the JSON data from the GitHub URL."""
-    response = requests.get(url)
-    if response.status_code == 200:
-        return response.json()  # Return parsed JSON
-    else:
-        print(f"Error fetching data. Status code: {response.status_code}")
-        return {}
 
 @app.get("/", response_class=JSONResponse)
 async def index_page():
@@ -56,34 +58,13 @@ async def handle_incoming_call(request: Request):
     # Return response with no TTS, everything handled by OpenAI's real AI
     return HTMLResponse(content=str(response), media_type="application/xml")
 
+
+
 @app.websocket("/media-stream")
 async def handle_media_stream(websocket: WebSocket):
     """Handle WebSocket connections between Twilio and OpenAI."""
-    print("✅ Client connected")
+    print("Client connected")
     await websocket.accept()
-
-    # Fetch dynamic information for the AI
-    info = fetch_info_from_github()
-    phone_number = info.get("phone_number", "Not available")
-    website = info.get("website", "Not available")
-    services = ", ".join(info.get("services", []))
-    location = info.get("location", "Location not provided")
-    important_info = "\n".join(info.get("important_info", ["No important info provided"]))
-
-    # Set the system message for the AI with dynamic content
-    SYSTEM_MESSAGE = f"""
-    You are a professional sales representative for Bravo Underground. 
-    Your goal is to engage potential customers about their pipe needs for upcoming projects. 
-    Start by introducing yourself and asking for their name. 
-    Once they respond, guide the conversation towards discussing reel vs. stick pipes, pricing, and delivery options. 
-    For example, we sell reel pipes at $100 each and stick pipes at $5 per foot. 
-    Our contact number is {phone_number}, and our website is {website}. 
-    We are located at: {location}.
-    Our services include {services}.
-
-    Here are some important points to mention:
-    - {important_info}
-    """
 
     async with websockets.connect(
         'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01',
@@ -92,7 +73,8 @@ async def handle_media_stream(websocket: WebSocket):
             "OpenAI-Beta": "realtime=v1"
         }
     ) as openai_ws:
-        await initialize_session(openai_ws, SYSTEM_MESSAGE)
+        # Immediately call send_initial_conversation_item to make AI speak first
+        await send_initial_conversation_item(openai_ws)
 
         stream_sid = None
         latest_media_timestamp = 0
@@ -123,7 +105,7 @@ async def handle_media_stream(websocket: WebSocket):
                         if mark_queue:
                             mark_queue.pop(0)
             except WebSocketDisconnect:
-                print("❌ Client disconnected.")
+                print("Client disconnected.")
                 if openai_ws.open:
                     await openai_ws.close()
 
@@ -149,7 +131,8 @@ async def handle_media_stream(websocket: WebSocket):
 
                         if response_start_timestamp_twilio is None:
                             response_start_timestamp_twilio = latest_media_timestamp
-                            print(f"Setting start timestamp for new response: {response_start_timestamp_twilio}ms")
+                            if SHOW_TIMING_MATH:
+                                print(f"Setting start timestamp for new response: {response_start_timestamp_twilio}ms")
 
                         # Update last_assistant_item safely
                         if response.get('item_id'):
@@ -205,7 +188,27 @@ async def handle_media_stream(websocket: WebSocket):
 
         await asyncio.gather(receive_from_twilio(), send_to_twilio())
 
-async def initialize_session(openai_ws, system_message):
+
+async def send_initial_conversation_item(openai_ws):
+    """Send initial conversation item if AI talks first."""
+    initial_conversation_item = {
+        "type": "conversation.item.create",
+        "item": {
+            "type": "message",
+            "role": "user",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": "Hi! This is Julia from Bravo Underground. May I ask who I’m speaking with?'"
+                }
+            ]
+        }
+    }
+    await openai_ws.send(json.dumps(initial_conversation_item))
+    await openai_ws.send(json.dumps({"type": "response.create"}))
+
+
+async def initialize_session(openai_ws):
     """Control initial session with OpenAI."""
     session_update = {
         "type": "session.update",
@@ -214,13 +217,16 @@ async def initialize_session(openai_ws, system_message):
             "input_audio_format": "g711_ulaw",
             "output_audio_format": "g711_ulaw",
             "voice": VOICE,
-            "instructions": system_message,
+            "instructions": SYSTEM_MESSAGE,
             "modalities": ["text", "audio"],
             "temperature": 0.9,
         }
     }
     print('Sending session update:', json.dumps(session_update))
     await openai_ws.send(json.dumps(session_update))
+
+    # Uncomment the next line to have the AI speak first
+    # await send_initial_conversation_item(openai_ws)
 
 if __name__ == "__main__":
     import uvicorn
