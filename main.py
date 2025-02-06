@@ -23,8 +23,7 @@ SYSTEM_MESSAGE = (
     "If they decline, be polite and offer to check back later. "
     "Do NOT drift into unrelated topics. Stay professional yet conversational, not robotic."
 )
-VOICE = 'nova'  # Most expressive, natural-sounding voice
-
+VOICE = 'nova'  # Most expressive, natural-sounding voice (ensure this is available)
 app = FastAPI()
 
 if not OPENAI_API_KEY:
@@ -38,7 +37,7 @@ async def index_page():
 async def handle_incoming_call(request: Request):
     """Handle incoming call and return TwiML response to connect to Media Stream."""
     response = VoiceResponse()
-    response.say("Hi! This is Rose from Bravo Underground. May I ask who I’m speaking with?")
+    response.say("Hi! This is Julia from Bravo Underground. May I ask who I’m speaking with?")
     response.pause(length=1)
 
     host = request.url.hostname
@@ -185,7 +184,7 @@ async def initialize_session(openai_ws):
             "voice": VOICE,
             "instructions": SYSTEM_MESSAGE,
             "modalities": ["text", "audio"],
-            "temperature": 0.8,
+            "temperature": 0.9,
         }
     }
     print('🚀 Sending session update:', json.dumps(session_update))
