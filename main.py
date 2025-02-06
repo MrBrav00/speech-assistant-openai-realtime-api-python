@@ -120,7 +120,7 @@ async def send_initial_conversation_item(openai_ws):
             "content": [
                 {
                     "type": "input_text",
-                    "text": \"Hey there! This is Julia from Bravo Underground. Quick question—who am I speaking with today?\""
+                    "text": "Hi! This is John from Bravo Underground. May I ask who I’m speaking with?"
 
                 }
             ]
@@ -128,6 +128,27 @@ async def send_initial_conversation_item(openai_ws):
     }
     await openai_ws.send(json.dumps(initial_conversation_item))
     await openai_ws.send(json.dumps({"type": "response.create"}))
+
+    # Wait for 2 seconds to give the user time to respond
+    await asyncio.sleep(2)
+
+    # Follow-up to keep conversation going if no response
+    follow_up = {
+        "type": "conversation.item.create",
+        "item": {
+            "type": "message",
+            "role": "user",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": "I wanted to check in to see if you have any upcoming projects that may need pipes."
+                }
+            ]
+        }
+    }
+    await openai_ws.send(json.dumps(follow_up))
+    await openai_ws.send(json.dumps({"type": "response.create"}))
+
 
     # Wait for 2 seconds to give the user time to respond
     await asyncio.sleep(2)
