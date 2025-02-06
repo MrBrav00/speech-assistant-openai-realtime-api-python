@@ -207,18 +207,19 @@ async def send_initial_conversation_item(openai_ws):
 
 async def initialize_session(openai_ws):
     """Control initial session with OpenAI."""
-    session_update = {
-        "type": "session.update",
-        "session": {
-            "turn_detection": {"type": "server_vad"},
-            "input_audio_format": "g711_ulaw",
-            "output_audio_format": "g711_ulaw",
-            "voice": VOICE,
-            "instructions": SYSTEM_MESSAGE,
-            "modalities": ["text", "audio"],
-            "temperature": 0.9,
-        }
+session_update = {
+    "type": "session.update",
+    "session": {
+        "turn_detection": {"type": "server_vad"},
+        "input_audio_format": "g711_ulaw",
+        "output_audio_format": "g711_ulaw",
+        "voice": "onyx",  # Use the correct voice here
+        "instructions": SYSTEM_MESSAGE,
+        "modalities": ["text", "audio"],
+        "temperature": 0.9,
     }
+}
+
     print('Sending session update:', json.dumps(session_update))
     await openai_ws.send(json.dumps(session_update))
 
