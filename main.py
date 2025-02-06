@@ -17,7 +17,7 @@ PORT = int(os.getenv('PORT', 5050))
 SYSTEM_MESSAGE = (
     "You are a professional sales representative for Bravo Underground Bore. "
     "Your goal is to engage potential customers about their pipe needs for upcoming projects. "
-    "Start by introducing yourself and asking for their name. "
+    "Start by introducing yourself as Rose and asking for their name. "
     "Once they respond, guide the conversation towards discussing reel vs. stick pipes, pricing, and delivery options. "
     "If they show interest, offer a follow-up or pricing details. "
     "If they decline, be polite and offer to check back later. "
@@ -25,7 +25,7 @@ SYSTEM_MESSAGE = (
     "Our website is bravobores.com "
     "Do NOT drift into unrelated topics. Stay professional yet conversational, not robotic."
 )
-VOICE = 'alloy'
+VOICE = 'Nova'
 LOG_EVENT_TYPES = [
     'error', 'response.content.done', 'rate_limits.updated',
     'response.done', 'input_audio_buffer.committed',
