@@ -14,6 +14,11 @@ load_dotenv()
 # Configuration
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 PORT = int(os.getenv('PORT', 5050))
+
+# Select the best OpenAI voice for natural conversation
+VOICE = 'nova'  # Most expressive, natural-sounding voice
+# Alternative voices: 'shimmer' (clear male voice), 'fable' (friendly conversational)
+
 SYSTEM_MESSAGE = (
     "You are a professional sales representative for Bravo Underground. "
     "Your goal is to engage potential customers about their pipe needs for upcoming projects. "
@@ -23,7 +28,6 @@ SYSTEM_MESSAGE = (
     "If they decline, be polite and offer to check back later. "
     "Do NOT drift into unrelated topics. Stay professional yet conversational, not robotic."
 )
-VOICE = 'onyx'  # Onyx has a deep, natural male voice
 
 app = FastAPI()
 
@@ -42,7 +46,7 @@ async def handle_incoming_call(request: Request):
         print(f"🔹 Received Twilio POST data: {data}")  
 
         response = VoiceResponse()
-        response.say("Hi! This is John from Bravo Underground. May I ask who I’m speaking with?")
+        response.say("Hi! This is Julia from Bravo Underground. May I ask who I’m speaking with?")
         response.pause(length=1)
 
         host = request.url.hostname
@@ -71,7 +75,7 @@ async def handle_media_stream(websocket: WebSocket):
         await initialize_session(openai_ws)
 
         async def receive_from_twilio():
-            """Receive audio data from Twilio and send it to OpenAI."""
+            """Receive audio data from Twilio and send to OpenAI."""
             try:
                 async for message in websocket.iter_text():
                     data = json.loads(message)
@@ -124,8 +128,8 @@ async def send_initial_conversation_item(openai_ws):
     await openai_ws.send(json.dumps(initial_conversation_item))
     await openai_ws.send(json.dumps({"type": "response.create"}))
 
-    # Pause briefly to let the customer respond, then smoothly continue
-    await asyncio.sleep(3)  
+    # AI waits 2 seconds. If no response, it continues the conversation naturally.
+    await asyncio.sleep(2)  
 
     follow_up = {
         "type": "conversation.item.create",
@@ -135,7 +139,7 @@ async def send_initial_conversation_item(openai_ws):
             "content": [
                 {
                     "type": "input_text",
-                    "text": "Great! I wanted to quickly check if you have any upcoming projects where you might need pipes."
+                    "text": "Thanks! I just wanted to check if you have any upcoming projects where you might need pipes."
                 }
             ]
         }
@@ -143,19 +147,18 @@ async def send_initial_conversation_item(openai_ws):
     await openai_ws.send(json.dumps(follow_up))
     await openai_ws.send(json.dumps({"type": "response.create"}))
 
-
 async def initialize_session(openai_ws):
-    """Control initial session with OpenAI."""
+    """Control initial session with OpenAI to ensure smooth voice interaction."""
     session_update = {
         "type": "session.update",
         "session": {
             "turn_detection": {"type": "server_vad"},
-            "input_audio_format": "g711_ulaw",
-            "output_audio_format": "g711_ulaw",
-            "voice": VOICE,
+            "input_audio_format": "pcm_mulaw",
+            "output_audio_format": "pcm_mulaw",
+            "voice": VOICE,  # Use updated natural voice
             "instructions": SYSTEM_MESSAGE,
             "modalities": ["text", "audio"],
-            "temperature": 0.8,
+            "temperature": 0.7,  # More natural randomness
         }
     }
     print('🚀 Sending session update:', json.dumps(session_update))
